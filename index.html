@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Ollama CORS Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; }
+        textarea { width: 100%; height: 100px; margin-bottom: 10px; }
+        button { padding: 10px; background: #0078d7; color: white; border: none; cursor: pointer; }
+        #response { margin-top: 20px; white-space: pre-wrap; background: #f5f5f5; padding: 10px; border-radius: 5px; }
+        #status { margin-top: 10px; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <h1>Ollama CORS Test</h1>
+    
+    <h2>Basic Connection Test</h2>
+    <button id="testConnection">Test Connection to Ollama</button>
+    <div id="connectionStatus"></div>
+    
+    <h2>Model List Test</h2>
+    <button id="fetchModels">Fetch Available Models</button>
+    <div id="modelsList"></div>
+    
+    <h2>Generate Text</h2>
+    <div>
+        <label for="modelSelect">Model:</label>
+        <select id="modelSelect">
+            <option value="llama2">llama2</option>
+            <!-- More models will be added dynamically -->
+        </select>
+    </div>
+    <textarea id="prompt" placeholder="Enter your prompt here...">Hello, world!</textarea>
+    <button id="generate">Generate</button>
+    <div id="status"></div>
+    <pre id="response"></pre>
+
+    <script>
+        // Default Ollama endpoint
+        const ollamaEndpoint = 'http://localhost:11434';
+        
+        // Test basic connection
+        document.getElementById('testConnection').addEventListener('click', async () => {
+            const statusEl = document.getElementById('connectionStatus');
+            statusEl.textContent = 'Testing connection...';
+            
+            try {
+                const response = await fetch(`${ollamaEndpoint}/api/version`);
+                if (response.ok) {
+                    const data = await response.json();
+                    statusEl.textContent = `✅ Connection successful! Ollama version: ${data.version}`;
+                    statusEl.style.color = 'green';
+                } else {
+                    statusEl.textContent = `❌ Connection failed: ${response.status} ${response.statusText}`;
+                    statusEl.style.color = 'red';
+                }
+            } catch (error) {
+                statusEl.textContent = `❌ Connection failed: ${error.message}`;
+                statusEl.style.color = 'red';
+                console.error(error);
+            }
+        });
+        
+        // Fetch available models
+        document.getElementById('fetchModels').addEventListener('click', async () => {
+            const modelsListEl = document.getElementById('modelsList');
+            const modelSelectEl = document.getElementById('modelSelect');
+            
+            modelsListEl.textContent = 'Fetching models...';
+            
+            try {
+                const response = await fetch(`${ollamaEndpoint}/api/tags`);
+                if (response.ok) {
+                    const data = await response.json();
+                    
+                    // Clear existing options except the first one
+                    while (modelSelectEl.options.length > 1) {
+                        modelSelectEl.remove(1);
+                    }
+                    
+                    if (data.models && data.models.length > 0) {
+                        modelsListEl.innerHTML = '<ul>' + 
+                            data.models.map(model => {
+                                // Add to dropdown
+                                const option = document.createElement('option');
+                                option.value = model.name;
+                                option.textContent = model.name;
+                                modelSelectEl.appendChild(option);
+                                
+                                return `<li>${model.name} (${(model.size / (1024 * 1024 * 1024)).toFixed(2)} GB)</li>`;
+                            }).join('') + 
+                            '</ul>';
+                    } else {
+                        modelsListEl.textContent = 'No models found';
+                    }
+                } else {
+                    modelsListEl.textContent = `Failed to fetch models: ${response.status} ${response.statusText}`;
+                }
+            } catch (error) {
+                modelsListEl.textContent = `Failed to fetch models: ${error.message}`;
+                console.error(error);
+            }
+        });
+        
+        // Generate text
+        document.getElementById('generate').addEventListener('click', async () => {
+            const prompt = document.getElementById('prompt').value;
+            const model = document.getElementById('modelSelect').value;
+            const responseEl = document.getElementById('response');
+            const statusEl = document.getElementById('status');
+            
+            if (!prompt) {
+                alert('Please enter a prompt');
+                return;
+            }
+            
+            responseEl.textContent = '';
+            statusEl.textContent = 'Generating...';
+            
+            try {
+                const response = await fetch(`${ollamaEndpoint}/api/generate`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        model: model,
+                        prompt: prompt,
+                        stream: false
+                    })
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    responseEl.textContent = data.response;
+                    statusEl.textContent = 'Generation complete';
+                } else {
+                    statusEl.textContent = `Generation failed: ${response.status} ${response.statusText}`;
+                    try {
+                        const errorData = await response.json();
+                        responseEl.textContent = `Error: ${JSON.stringify(errorData, null, 2)}`;
+                    } catch (e) {
+                        responseEl.textContent = 'Error: Could not parse error response';
+                    }
+                }
+            } catch (error) {
+                statusEl.textContent = `Generation failed: ${error.message}`;
+                console.error(error);
+            }
+        });
+    </script>
+</body>
+</html> 
